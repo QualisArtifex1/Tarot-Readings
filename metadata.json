@@ -1,0 +1,5 @@
+{
+  "name": "Mystic Insight Tarot",
+  "description": "A web application that provides a three-card tarot reading using the Rider-Waite deck. Users can shuffle, cut, and draw cards to receive an insightful interpretation of their past, present, and future from the Gemini AI.",
+  "requestFramePermissions": []
+}
