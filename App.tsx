@@ -34,6 +34,12 @@ const App: React.FC = () => {
   const [reading, setReading] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [cutIndex, setCutIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const isTouchDevice = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  }, []);
 
   const beginShuffle = useCallback(() => {
     setGameState(GameState.Shuffling);
@@ -54,6 +60,7 @@ const App: React.FC = () => {
 
   const handleCutDeck = useCallback((index: number) => {
     if (gameState !== GameState.ReadyToCut) return;
+    setDragOverIndex(null);
     setCutIndex(index);
     setGameState(GameState.Cutting);
     setTimeout(() => {
@@ -115,41 +122,70 @@ const App: React.FC = () => {
   }, [gameState, beginShuffle, handleDrawCards, handleGetReading, reset]);
 
   const renderDeck = () => {
-    const isSplayed = gameState === GameState.ReadyToCut;
+    const isSplayed = gameState === GameState.ReadyToCut || gameState === GameState.Cutting;
     if (isSplayed) {
       return (
-        <div className="relative w-full h-full flex items-center justify-center">
-            {deck.map((card, i) => (
-                <div 
-                    key={i} 
-                    className="absolute transition-transform duration-300 ease-in-out hover:!scale-105 hover:!translate-y-[-20px] cursor-pointer"
-                    style={{
-                        transform: `translateX(${(i - deck.length / 2) * 15}px) rotateZ(${(i - deck.length / 2) * 2}deg)`,
-                        zIndex: i
-                    }}
-                    onClick={() => handleCutDeck(i)}
-                >
-                    <Card card={card} isFlipped={false} isReversed={false} className="!w-28 !h-[12.25rem] md:!w-32 md:!h-[14rem]" />
-                </div>
-            ))}
+        <div 
+          className="relative w-full h-full flex items-center justify-center"
+          onDragLeave={!isTouchDevice ? () => setDragOverIndex(null) : undefined}
+        >
+            {deck.map((card, i) => {
+                const isCutting = gameState === GameState.Cutting;
+                const fanTranslateX = (i - deck.length / 2) * 15;
+                const fanRotateZ = (i - deck.length / 2) * 2;
+                
+                const gapOffset = !isTouchDevice && dragOverIndex !== null && i >= dragOverIndex ? 50 : 0;
+                
+                let totalTranslateX = fanTranslateX + gapOffset;
+                if (isCutting && cutIndex !== null) {
+                    const animationOffset = i < cutIndex ? -400 : 400;
+                    totalTranslateX = fanTranslateX + animationOffset;
+                }
+                
+                const transform = `translateX(${totalTranslateX}px) rotateZ(${fanRotateZ}deg)`;
+
+                return (
+                    <div 
+                        key={i} 
+                        className={`absolute ease-in-out ${
+                            isCutting 
+                                ? 'transition-transform duration-1000' 
+                                : 'transition-transform duration-300'
+                        } ${isTouchDevice && gameState === GameState.ReadyToCut ? 'cursor-pointer' : ''}`}
+                        style={{
+                            transform: transform,
+                            zIndex: i
+                        }}
+                        onDragOver={!isTouchDevice ? (e) => {
+                            e.preventDefault();
+                            if (gameState === GameState.ReadyToCut && dragOverIndex !== i) {
+                                setDragOverIndex(i);
+                            }
+                        } : undefined}
+                        onDrop={!isTouchDevice ? (e) => {
+                            e.preventDefault();
+                            if (gameState === GameState.ReadyToCut) {
+                                handleCutDeck(i);
+                            }
+                        } : undefined}
+                        onClick={isTouchDevice ? () => {
+                            if (gameState === GameState.ReadyToCut) {
+                                handleCutDeck(i);
+                            }
+                        }: undefined}
+                    >
+                        <Card card={card} isFlipped={false} isReversed={false} className="!w-28 !h-[12.25rem] md:!w-32 md:!h-[14rem] pointer-events-none" />
+                    </div>
+                )
+            })}
         </div>
       )
     }
 
-    // Default Pile view for Start, Shuffle, Cut, Draw states
-    const isCutting = gameState === GameState.Cutting;
+    // Default Pile view for Start, Shuffle, etc.
     return (
       <div className={`relative w-40 h-[17.5rem] md:w-48 md:h-[21rem] deck-pile ${gameState === GameState.Shuffling ? 'shuffling' : ''}`}>
-        {deck.map((card, i) => {
-            let style = {};
-            if (isCutting && cutIndex !== null) {
-                if (i < cutIndex) { // Top part of cut
-                    style = { transform: 'translateX(-150%)', transition: 'transform 1s ease-in-out' };
-                } else { // Bottom part of cut
-                    style = { transform: 'translateX(150%)', transition: 'transform 1s ease-in-out' };
-                }
-            }
-           return (
+        {deck.map((card, i) => (
               <div
                   key={i}
                   className="absolute w-full h-full"
@@ -157,13 +193,11 @@ const App: React.FC = () => {
                       top: `${i * -1}px`,
                       left: `${i * -1}px`,
                       zIndex: deck.length - i,
-                      ...style
                   }}
               >
                 <Card card={card} isFlipped={false} isReversed={false} />
               </div>
-           )
-        })}
+        ))}
       </div>
     )
   }
@@ -171,10 +205,9 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-indigo-900 text-gray-200 flex flex-col items-center justify-center p-4 overflow-x-hidden">
       <header className="text-center mb-8">
-        <h1 className="text-4xl md:text-6xl font-cinzel text-yellow-300 tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.7)]">
-          Mystic Insight
+        <h1 className="text-3xl md:text-5xl font-cinzel text-yellow-300 tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.7)]">
+          Chaotic Good Guild Tarot Reading
         </h1>
-        <p className="text-yellow-100/70 text-lg">A journey through the cards</p>
       </header>
       
       <main className="flex-grow flex flex-col items-center justify-center w-full">
@@ -195,8 +228,33 @@ const App: React.FC = () => {
           )}
         </div>
         
-        <div className="h-32 mt-8 flex flex-col items-center justify-center">
-          {gameState === GameState.ReadyToCut && <p className="text-yellow-200 text-lg font-cinzel tracking-widest mb-4">Click a card to cut the deck</p>}
+        <div className="h-48 mt-8 flex flex-col items-center justify-center">
+          {gameState === GameState.ReadyToCut && (
+            <>
+              <p className="text-yellow-200 text-lg font-cinzel tracking-widest mb-4">
+                {isTouchDevice ? 'Tap a card to cut the deck' : 'Drag the cutter to choose your cut'}
+              </p>
+              {!isTouchDevice && (
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.currentTarget.style.opacity = '0.5';
+                  }}
+                  onDragEnd={(e) => {
+                    e.currentTarget.style.opacity = '1';
+                    setDragOverIndex(null);
+                  }}
+                  className="w-28 h-[12.25rem] md:w-32 md:h-[14rem] bg-black/50 border-2 border-yellow-600 rounded-xl cursor-move flex items-center justify-center transition-opacity"
+                  aria-label="Draggable cutter card"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 8h16M4 16h16" />
+                    </svg>
+                </div>
+              )}
+            </>
+          )}
           {actionButton}
         </div>
 
@@ -209,10 +267,6 @@ const App: React.FC = () => {
         )}
       </main>
       
-      <footer className="text-center text-xs text-gray-500 py-4">
-        <p>Tarot readings are for entertainment purposes only.</p>
-      </footer>
-
       <style>{`
         .action-button {
           padding: 0.75rem 2rem;
