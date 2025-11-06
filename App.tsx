@@ -125,10 +125,10 @@ const App: React.FC = () => {
         <div className="h-96 flex items-center justify-center w-full">
           {gameState < GameState.Drawing && (
              <div className="relative w-48 h-80">
-                 {deck.slice(0, 10).map((_, i) => (
+                 {deck.slice(0, 10).map((card, i) => (
                     <div
                         key={i}
-                        className="absolute w-full h-full rounded-xl shadow-2xl shadow-black bg-gradient-to-br from-indigo-800 to-gray-900 border-2 border-yellow-500/30"
+                        className="absolute w-full h-full"
                         style={{
                             top: `${i * -2}px`,
                             left: `${i * -1}px`,
@@ -136,7 +136,9 @@ const App: React.FC = () => {
                             transition: 'all 0.5s',
                             transform: gameState === GameState.Start ? 'translateY(0)' : 'translateY(-20px)'
                         }}
-                    />
+                    >
+                      <Card card={card} isFlipped={false} isReversed={false} />
+                    </div>
                  ))}
              </div>
           )}
