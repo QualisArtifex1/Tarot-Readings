@@ -4,6 +4,7 @@ import { TAROT_DECK } from './constants';
 import { getTarotReading } from './services/geminiService';
 import Card from './components/Card';
 import Loader from './components/Loader';
+import { cardBackImage } from './cardBackImage';
 
 const markdownToHtml = (markdown: string): string => {
     if (!markdown) return '';
@@ -128,7 +129,7 @@ const App: React.FC = () => {
                  {deck.slice(0, 10).map((_, i) => (
                     <div
                         key={i}
-                        className="absolute w-full h-full rounded-xl shadow-2xl shadow-black bg-gradient-to-br from-indigo-800 to-gray-900 border-2 border-yellow-500/30"
+                        className="absolute w-full h-full rounded-xl overflow-hidden shadow-2xl shadow-black border-2 border-yellow-500/30"
                         style={{
                             top: `${i * -2}px`,
                             left: `${i * -1}px`,
@@ -136,7 +137,14 @@ const App: React.FC = () => {
                             transition: 'all 0.5s',
                             transform: gameState === GameState.Start ? 'translateY(0)' : 'translateY(-20px)'
                         }}
-                    />
+                    >
+                        <img
+                            src={cardBackImage}
+                            alt="Tarot card back"
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                        />
+                    </div>
                  ))}
              </div>
           )}

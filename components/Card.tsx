@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card as CardType } from '../types';
+import { cardBackImage } from '../cardBackImage';
 
 interface CardProps {
   card: CardType;
@@ -17,9 +18,14 @@ const Card: React.FC<CardProps> = ({ card, isFlipped, isReversed, className = ''
         }`}
       >
         {/* Card Back */}
-        <div
-          className="absolute w-full h-full [backface-visibility:hidden] rounded-xl shadow-lg shadow-black/50 bg-gradient-to-br from-indigo-800 to-gray-900 border-2 border-yellow-500/30 [transform:translateZ(0px)]"
-        />
+        <div className="absolute w-full h-full [backface-visibility:hidden] rounded-xl overflow-hidden shadow-lg shadow-black/50 border-2 border-yellow-500/30 [transform:translateZ(0px)]">
+          <img
+            src={cardBackImage}
+            alt="Tarot card back"
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        </div>
         {/* Card Front */}
         <div className="absolute w-full h-full [backface-visibility:hidden] [transform:rotateY(180deg)] rounded-xl overflow-hidden shadow-lg shadow-black/50 border-2 border-yellow-400/50">
           <img
