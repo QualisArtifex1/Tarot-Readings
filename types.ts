@@ -2,6 +2,7 @@
 export interface Card {
   name: string;
   image: string;
+  type: 'major' | 'minor';
 }
 
 export interface DrawnCard extends Card {
@@ -10,8 +11,10 @@ export interface DrawnCard extends Card {
 
 export enum GameState {
   Start,
-  Shuffled,
-  Cut,
+  Shuffling,
+  ReadyToCut,
+  Cutting,
+  ReadyToDraw,
   Drawing,
   Revealing,
   Reading,

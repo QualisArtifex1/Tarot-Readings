@@ -4,6 +4,7 @@ import { TAROT_DECK } from './constants';
 import { getTarotReading } from './services/geminiService';
 import Card from './components/Card';
 import Loader from './components/Loader';
+import MajorArcanaAlert from './components/MajorArcanaAlert';
 
 const markdownToHtml = (markdown: string): string => {
     if (!markdown) return '';
@@ -11,18 +12,9 @@ const markdownToHtml = (markdown: string): string => {
         .split('\n\n') // Split by paragraphs
         .map(block => {
             block = block.trim();
-            // Headings
-            if (block.startsWith('# ')) {
-                return `<h1>${block.substring(2)}</h1>`;
-            }
-            if (block.startsWith('## ')) {
-                return `<h2>${block.substring(3)}</h2>`;
-            }
-            if (block.startsWith('### ')) {
-                return `<h3>${block.substring(4)}</h3>`;
-            }
-            
-            // Paragraphs with inline formatting
+            if (block.startsWith('# ')) { return `<h1>${block.substring(2)}</h1>`; }
+            if (block.startsWith('## ')) { return `<h2>${block.substring(3)}</h2>`; }
+            if (block.startsWith('### ')) { return `<h3>${block.substring(4)}</h3>`; }
             if(block.length > 0) {
               const processedBlock = block
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -41,42 +33,52 @@ const App: React.FC = () => {
   const [drawnCards, setDrawnCards] = useState<DrawnCard[]>([]);
   const [reading, setReading] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [cutIndex, setCutIndex] = useState<number | null>(null);
 
-  const shuffleDeck = useCallback(() => {
-    setDeck((prevDeck) => {
-      const shuffled = [...prevDeck];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      return shuffled;
-    });
-    setDrawnCards([]);
-    setReading('');
-    setGameState(GameState.Shuffled);
+  const beginShuffle = useCallback(() => {
+    setGameState(GameState.Shuffling);
+    setTimeout(() => {
+      setDeck((prevDeck) => {
+        const shuffled = [...prevDeck];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      });
+      setDrawnCards([]);
+      setReading('');
+      setGameState(GameState.ReadyToCut);
+    }, 1500);
   }, []);
+
+  const handleCutDeck = useCallback((index: number) => {
+    if (gameState !== GameState.ReadyToCut) return;
+    setCutIndex(index);
+    setGameState(GameState.Cutting);
+    setTimeout(() => {
+        setDeck(prevDeck => {
+            return [...prevDeck.slice(index), ...prevDeck.slice(0, index)];
+        });
+        setCutIndex(null);
+        setGameState(GameState.ReadyToDraw);
+    }, 2000);
+  }, [gameState]);
 
   const handleDrawCards = useCallback(() => {
     if (deck.length < 3) return;
-
     const newDrawnCards: DrawnCard[] = [];
     const newDeck = [...deck];
-
     for (let i = 0; i < 3; i++) {
       const card = newDeck.pop();
       if (card) {
-        newDrawnCards.push({
-          ...card,
-          isReversed: Math.random() < 0.5,
-        });
+        newDrawnCards.push({ ...card, isReversed: Math.random() < 0.5 });
       }
     }
-    
     setDrawnCards(newDrawnCards);
     setDeck(newDeck);
     setGameState(GameState.Drawing);
-    
-    setTimeout(() => setGameState(GameState.Revealing), 1500); // Wait for card dealing animation
+    setTimeout(() => setGameState(GameState.Revealing), 1500);
   }, [deck]);
 
   const handleGetReading = useCallback(async () => {
@@ -100,8 +102,8 @@ const App: React.FC = () => {
   const actionButton = useMemo(() => {
     switch (gameState) {
       case GameState.Start:
-        return <button onClick={shuffleDeck} className="action-button">Begin Reading</button>;
-      case GameState.Shuffled:
+        return <button onClick={beginShuffle} className="action-button">Begin Reading</button>;
+      case GameState.ReadyToDraw:
         return <button onClick={handleDrawCards} className="action-button">Draw Three Cards</button>;
       case GameState.Revealing:
         return <button onClick={handleGetReading} className="action-button">Reveal Your Fate</button>;
@@ -110,7 +112,61 @@ const App: React.FC = () => {
       default:
         return null;
     }
-  }, [gameState, shuffleDeck, handleDrawCards, handleGetReading, reset]);
+  }, [gameState, beginShuffle, handleDrawCards, handleGetReading, reset]);
+
+  const renderDeck = () => {
+    const isSplayed = gameState === GameState.ReadyToCut;
+    if (isSplayed) {
+      return (
+        <div className="relative w-full h-full flex items-center justify-center">
+            {deck.map((card, i) => (
+                <div 
+                    key={i} 
+                    className="absolute transition-transform duration-300 ease-in-out hover:!scale-105 hover:!translate-y-[-20px] cursor-pointer"
+                    style={{
+                        transform: `translateX(${(i - deck.length / 2) * 15}px) rotateZ(${(i - deck.length / 2) * 2}deg)`,
+                        zIndex: i
+                    }}
+                    onClick={() => handleCutDeck(i)}
+                >
+                    <Card card={card} isFlipped={false} isReversed={false} className="!w-28 !h-[12.25rem] md:!w-32 md:!h-[14rem]" />
+                </div>
+            ))}
+        </div>
+      )
+    }
+
+    // Default Pile view for Start, Shuffle, Cut, Draw states
+    const isCutting = gameState === GameState.Cutting;
+    return (
+      <div className={`relative w-40 h-[17.5rem] md:w-48 md:h-[21rem] deck-pile ${gameState === GameState.Shuffling ? 'shuffling' : ''}`}>
+        {deck.map((card, i) => {
+            let style = {};
+            if (isCutting && cutIndex !== null) {
+                if (i < cutIndex) { // Top part of cut
+                    style = { transform: 'translateX(-150%)', transition: 'transform 1s ease-in-out' };
+                } else { // Bottom part of cut
+                    style = { transform: 'translateX(150%)', transition: 'transform 1s ease-in-out' };
+                }
+            }
+           return (
+              <div
+                  key={i}
+                  className="absolute w-full h-full"
+                  style={{
+                      top: `${i * -1}px`,
+                      left: `${i * -1}px`,
+                      zIndex: deck.length - i,
+                      ...style
+                  }}
+              >
+                <Card card={card} isFlipped={false} isReversed={false} />
+              </div>
+           )
+        })}
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-indigo-900 text-gray-200 flex flex-col items-center justify-center p-4 overflow-x-hidden">
@@ -123,30 +179,13 @@ const App: React.FC = () => {
       
       <main className="flex-grow flex flex-col items-center justify-center w-full">
         <div className="h-96 flex items-center justify-center w-full">
-          {gameState < GameState.Drawing && (
-             <div className="relative w-48 h-80">
-                 {deck.slice(0, 10).map((card, i) => (
-                    <div
-                        key={i}
-                        className="absolute w-full h-full"
-                        style={{
-                            top: `${i * -2}px`,
-                            left: `${i * -1}px`,
-                            zIndex: 10 - i,
-                            transition: 'all 0.5s',
-                            transform: gameState === GameState.Start ? 'translateY(0)' : 'translateY(-20px)'
-                        }}
-                    >
-                      <Card card={card} isFlipped={false} isReversed={false} />
-                    </div>
-                 ))}
-             </div>
-          )}
+          {gameState < GameState.Drawing ? renderDeck() : null}
           {drawnCards.length > 0 && (
             <div className="grid grid-cols-3 gap-4 md:gap-8 w-full max-w-3xl">
               {drawnCards.map((card, index) => (
-                 <div key={index} className="flex flex-col items-center card-container" style={{ animationDelay: `${index * 0.4}s` }}>
+                 <div key={index} className="relative flex flex-col items-center card-container" style={{ animationDelay: `${index * 0.4}s` }}>
                     <Card card={card} isFlipped={gameState >= GameState.Revealing} isReversed={card.isReversed} />
+                    {gameState >= GameState.Revealing && card.type === 'major' && <MajorArcanaAlert />}
                     <h2 className={`mt-4 text-xl font-cinzel text-yellow-300 transition-opacity duration-1000 ${gameState >= GameState.Revealing ? 'opacity-100' : 'opacity-0'}`}>
                         {['Past', 'Present', 'Future'][index]}
                     </h2>
@@ -156,7 +195,8 @@ const App: React.FC = () => {
           )}
         </div>
         
-        <div className="h-32 mt-8 flex items-center justify-center">
+        <div className="h-32 mt-8 flex flex-col items-center justify-center">
+          {gameState === GameState.ReadyToCut && <p className="text-yellow-200 text-lg font-cinzel tracking-widest mb-4">Click a card to cut the deck</p>}
           {actionButton}
         </div>
 
@@ -195,27 +235,34 @@ const App: React.FC = () => {
             perspective: 1000px;
         }
         @keyframes dealCardAnimation {
-          from {
-            opacity: 0;
-            transform: translateY(-60px) scale(0.7);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
+          from { opacity: 0; transform: translateY(-60px) scale(0.7); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
         .card-container {
           opacity: 0;
           animation: dealCardAnimation 0.5s ease-out forwards;
         }
         .reading-text p {
-          font-family: 'Playfair Display', serif;
-          font-size: 1.2rem;
-          line-height: 1.8;
-          color: #d1d5db;
+          font-family: 'Playfair Display', serif; font-size: 1.2rem; line-height: 1.8; color: #d1d5db;
         }
-        .reading-text strong {
-          color: #fde68a; /* yellow-200 */
+        .reading-text strong { color: #fde68a; }
+
+        @keyframes shuffleAnimation {
+          0%, 100% { transform: translateY(0) rotate(0); }
+          25% { transform: translateY(-10px) rotate(-2deg); }
+          75% { transform: translateY(10px) rotate(2deg); }
+        }
+        .shuffling .deck-pile > div:nth-child(odd) { animation: shuffleAnimation 0.5s ease-in-out infinite; }
+        .shuffling .deck-pile > div:nth-child(even) { animation: shuffleAnimation 0.5s ease-in-out infinite reverse; }
+
+        @keyframes majorArcanaFade {
+          0% { opacity: 0; transform: translateY(20px) scale(0.8); }
+          20% { opacity: 1; transform: translateY(0) scale(1.1); }
+          80% { opacity: 1; transform: translateY(0) scale(1); }
+          100% { opacity: 0; transform: translateY(-20px) scale(0.9); }
+        }
+        .major-arcana-alert {
+          animation: majorArcanaFade 3s ease-in-out forwards;
         }
       `}</style>
     </div>
